@@ -12,6 +12,8 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: sitekit-portal-pin
  *
+ * Copyright (C) 2026 Christopher Ross (https://thisismyurl.com)
+ *
  * Mechanism:
  *   - Active only on production (siteurl = https://thisismyurl.com).
  *   - Daily wp-cron snapshots all `googlesitekit_*` options + owner user_meta keys

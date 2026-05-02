@@ -1,0 +1,95 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Before filing, please check existing issues to avoid duplicates.
+
+        **Security issues:** do **not** file here. Email cross@thisismyurl.com — see [SECURITY.md](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/blob/main/SECURITY.md).
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: From the `Version:` line in the plugin file header, or the commit hash if running from `main`.
+      placeholder: 1.0.0 or commit abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: wp-version
+    attributes:
+      label: WordPress version
+      placeholder: 6.7.1
+    validations:
+      required: true
+
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+      placeholder: 8.2.15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Hosting environment
+      options:
+        - WP Engine (Production)
+        - WP Engine (Dev or Staging)
+        - WP Engine (Atlas)
+        - Other managed host
+        - Self-hosted / VPS
+        - Local (Local by Flywheel, DDEV, Lando, etc.)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - mu-plugins (must-use)
+        - Regular plugin (activated)
+        - Git submodule
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: As specific as possible. Include any commands run, any URLs hit.
+      placeholder: |
+        1. Take a fresh snapshot via `wp sitekit-pin snapshot`
+        2. Run a Portal copy from dev to prod
+        3. Hit `/wp-admin/`
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include any error messages, debug.log output, or `wp sitekit-pin status` output. **Redact credentials before pasting.**
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Other plugins active, custom modifications, anything that might be relevant.
