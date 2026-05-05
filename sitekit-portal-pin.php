@@ -39,11 +39,6 @@ defined( 'ABSPATH' ) || exit;
 class TIMU_SiteKit_Prod_Pin {
 
 	/**
-	 * URL of the production environment. Plugin no-ops everywhere else.
-	 */
-	const PROD_SITEURL = 'https://thisismyurl.com';
-
-	/**
 	 * Cron hook for daily snapshot refresh.
 	 */
 	const CRON_HOOK = 'timu_sitekit_pin_snapshot';
@@ -97,7 +92,35 @@ class TIMU_SiteKit_Prod_Pin {
 	 * Are we running on production?
 	 */
 	public static function is_production() {
-		return rtrim( (string) get_option( 'siteurl' ), '/' ) === self::PROD_SITEURL;
+		$prod_url = self::get_prod_siteurl();
+		if ( '' === $prod_url ) {
+			return false; // No production URL configured — no-op silently.
+		}
+		return rtrim( (string) get_option( 'siteurl' ), '/' ) === $prod_url;
+	}
+
+	/**
+	 * Resolve the production site URL via, in priority order:
+	 *   1. SITEKIT_PORTAL_PIN_PROD_URL constant (define in wp-config.php)
+	 *   2. sitekit_portal_pin_prod_url WP option (settable from admin)
+	 *   3. sitekit_portal_pin_prod_url filter (opt-in for env-name detection)
+	 *
+	 * Returns empty string if not configured anywhere, which causes is_production()
+	 * to return false and the plugin to no-op silently.
+	 */
+	public static function get_prod_siteurl(): string {
+		if ( defined( 'SITEKIT_PORTAL_PIN_PROD_URL' ) && '' !== (string) SITEKIT_PORTAL_PIN_PROD_URL ) {
+			return rtrim( (string) SITEKIT_PORTAL_PIN_PROD_URL, '/' );
+		}
+
+		$db_value = (string) get_option( 'sitekit_portal_pin_prod_url', '' );
+		if ( '' !== $db_value ) {
+			return rtrim( $db_value, '/' );
+		}
+
+		/** This filter lets site owners auto-derive prod URL from environment conventions. */
+		$filtered = (string) apply_filters( 'sitekit_portal_pin_prod_url', '' );
+		return rtrim( $filtered, '/' );
 	}
 
 	/**
@@ -214,15 +237,23 @@ class TIMU_SiteKit_Prod_Pin {
 	}
 
 	/**
-	 * Write a snapshot array to disk. Returns bool.
+	 * Write a snapshot array to disk, wrapped in an HMAC envelope for integrity. Returns bool.
 	 */
 	public static function write_snapshot( $snap ) {
 		$path = self::snapshot_path();
-		$json = wp_json_encode( $snap, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
-		if ( false === $json ) {
+		$body = wp_json_encode( $snap, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+		if ( false === $body ) {
 			return false;
 		}
-		$ok = (bool) file_put_contents( $path, $json, LOCK_EX );
+		$mac     = hash_hmac( 'sha256', $body, wp_salt( 'auth' ) );
+		$payload = wp_json_encode(
+			array( 'mac' => $mac, 'body' => $body ),
+			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+		);
+		if ( false === $payload ) {
+			return false;
+		}
+		$ok = (bool) file_put_contents( $path, $payload, LOCK_EX );
 		if ( $ok ) {
 			chmod( $path, 0640 );
 		}
@@ -230,7 +261,8 @@ class TIMU_SiteKit_Prod_Pin {
 	}
 
 	/**
-	 * Read snapshot from disk. Returns array or null.
+	 * Read snapshot from disk. Verifies HMAC before returning data.
+	 * Returns array (snapshot) or null on failure/tampering/missing MAC.
 	 */
 	public static function read_snapshot() {
 		$path = self::snapshot_path();
@@ -241,7 +273,27 @@ class TIMU_SiteKit_Prod_Pin {
 		if ( false === $raw ) {
 			return null;
 		}
-		$decoded = json_decode( $raw, true );
+		$payload = json_decode( $raw, true );
+		if ( ! is_array( $payload ) ) {
+			return null;
+		}
+
+		// Pre-MAC snapshots (plain JSON with 'options' key at root) are silently rejected.
+		// The next healthy cron run will write a fresh MAC'd snapshot.
+		if ( ! isset( $payload['mac'], $payload['body'] ) ) {
+			return null;
+		}
+
+		$expected = hash_hmac( 'sha256', (string) $payload['body'], wp_salt( 'auth' ) );
+		if ( ! hash_equals( $expected, (string) $payload['mac'] ) ) {
+			// Integrity check failed. Log a single notice and fail closed.
+			add_action( 'admin_notices', static function () {
+				echo '<div class="notice notice-error"><p><strong>Site Kit Portal Pin:</strong> snapshot integrity check failed (HMAC mismatch). The snapshot file may have been tampered with or corrupted. A fresh snapshot will be taken on the next healthy auth check.</p></div>';
+			} );
+			return null;
+		}
+
+		$decoded = json_decode( (string) $payload['body'], true );
 		if ( ! is_array( $decoded ) || empty( $decoded['options'] ) ) {
 			return null;
 		}
@@ -344,7 +396,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		 */
 		public function snapshot( $args, $assoc_args ) {
 			if ( ! TIMU_SiteKit_Prod_Pin::is_production() ) {
-				WP_CLI::error( 'Not on production (siteurl != ' . TIMU_SiteKit_Prod_Pin::PROD_SITEURL . '). Snapshot is prod-only.' );
+					WP_CLI::error( 'Not on production (siteurl != ' . TIMU_SiteKit_Prod_Pin::get_prod_siteurl() . '). Snapshot is prod-only.' );
 			}
 			if ( ! TIMU_SiteKit_Prod_Pin::is_auth_healthy() ) {
 				WP_CLI::error( 'Site Kit auth not healthy on prod right now — refusing to snapshot a broken state. Re-auth in browser first, then re-run.' );
@@ -407,13 +459,24 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::log( 'Snapshot path: ' . $path );
 
 			if ( file_exists( $path ) ) {
+				// Detect MAC envelope before calling read_snapshot() so we can report MAC status.
+				$raw_file    = file_get_contents( $path );
+				$raw_payload = is_string( $raw_file ) ? json_decode( $raw_file, true ) : null;
+				$has_mac     = is_array( $raw_payload ) && isset( $raw_payload['mac'], $raw_payload['body'] );
+				$mac_status  = 'MAC-missing (pre-upgrade snapshot; will be replaced on next healthy cron)';
+				if ( $has_mac ) {
+					$expected   = hash_hmac( 'sha256', (string) $raw_payload['body'], wp_salt( 'auth' ) );
+					$mac_status = hash_equals( $expected, (string) $raw_payload['mac'] ) ? 'MAC-verified OK' : 'MAC-FAILED (integrity check failed)';
+				}
+
 				$snap     = TIMU_SiteKit_Prod_Pin::read_snapshot();
 				$age_days = $snap && ! empty( $snap['taken_at'] ) ? round( ( time() - $snap['taken_at'] ) / DAY_IN_SECONDS, 1 ) : 'unknown';
 				WP_CLI::log( 'Snapshot exists: YES' );
-				WP_CLI::log( '  taken_at: ' . ( $snap['taken_at_human'] ?? 'unknown' ) );
-				WP_CLI::log( '  age_days: ' . $age_days );
-				WP_CLI::log( '  options:  ' . ( $snap ? count( $snap['options'] ) : 0 ) );
-				WP_CLI::log( '  usermeta: ' . ( $snap && ! empty( $snap['usermeta'] ) ? count( $snap['usermeta'] ) : 0 ) );
+				WP_CLI::log( '  integrity: ' . $mac_status );
+				WP_CLI::log( '  taken_at:  ' . ( $snap['taken_at_human'] ?? 'unknown' ) );
+				WP_CLI::log( '  age_days:  ' . $age_days );
+				WP_CLI::log( '  options:   ' . ( $snap ? count( $snap['options'] ) : 0 ) );
+				WP_CLI::log( '  usermeta:  ' . ( $snap && ! empty( $snap['usermeta'] ) ? count( $snap['usermeta'] ) : 0 ) );
 			} else {
 				WP_CLI::log( 'Snapshot exists: NO' );
 			}
