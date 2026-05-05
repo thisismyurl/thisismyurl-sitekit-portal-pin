@@ -1,0 +1,56 @@
+name: PR Lint
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  php-lint:
+    name: PHP Syntax (${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: none
+          coverage: none
+
+      - name: php -l (blocking)
+        run: find . -name '*.php' -not -path './vendor/*' | xargs -I{} php -l {}
+
+  phpcs:
+    name: PHPCS (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # advisory — does not block merge
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+          coverage: none
+
+      - name: Install PHPCS + WordPress Coding Standards
+        run: |
+          composer require --dev \
+            squizlabs/php_codesniffer \
+            wp-coding-standards/wpcs \
+            phpcsstandards/phpcsutils \
+            phpcsstandards/phpcsextra \
+            --no-interaction --prefer-dist
+          ./vendor/bin/phpcs --config-set installed_paths \
+            vendor/wp-coding-standards/wpcs,vendor/phpcsstandards/phpcsutils,vendor/phpcsstandards/phpcsextra
+
+      - name: Run PHPCS (advisory)
+        run: ./vendor/bin/phpcs --standard=phpcs.xml --report=checkstyle || true

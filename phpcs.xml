@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<ruleset name="SiteKit Portal Pin">
+    <description>WordPress Coding Standards for thisismyurl/thisismyurl-sitekit-portal-pin.</description>
+
+    <!-- Scan this file only; exclude vendor and any build artifacts. -->
+    <file>sitekit-portal-pin.php</file>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+
+    <!-- Target minimum PHP version from plugin header. -->
+    <config name="testVersion" value="7.4-"/>
+
+    <!-- WordPress Coding Standards. -->
+    <rule ref="WordPress"/>
+
+    <!--
+        Documented suppressions
+        =======================
+
+        1. Generic.Files.OneObjectStructurePerFile
+           The plugin intentionally houses two class definitions in a single file:
+           TIMU_SiteKit_Prod_Pin (main class) and the anonymous WP-CLI command class.
+           Splitting into separate files would require an autoloader and complicate
+           single-file plugin distribution. Accepted by design.
+    -->
+    <rule ref="Generic.Files.OneObjectStructurePerFile">
+        <severity>0</severity>
+    </rule>
+
+    <!--
+        2. WordPress.WP.AlternativeFunctions — file_get_contents / file_put_contents / chmod
+           PHPCS-WordPress recommends WP_Filesystem for filesystem operations.
+           WP_Filesystem cannot reliably traverse to paths outside wp-content/ (where
+           the snapshot file lives by design — it must survive WP Engine Portal copies
+           which replace wp-content/). Direct PHP filesystem calls are correct here.
+    -->
+    <rule ref="WordPress.WP.AlternativeFunctions">
+        <properties>
+            <property name="exclude" type="array">
+                <element value="file_get_contents"/>
+                <element value="file_put_contents"/>
+            </property>
+        </properties>
+    </rule>
+
+</ruleset>
