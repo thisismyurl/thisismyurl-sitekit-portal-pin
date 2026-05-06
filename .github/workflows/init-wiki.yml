@@ -1,0 +1,67 @@
+name: Initialize Wiki
+
+on:
+  workflow_dispatch:
+
+jobs:
+  init-wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Write wiki pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+
+          WIKI_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.wiki.git"
+
+          # Try clone first; if the wiki doesn't exist yet, init a fresh repo
+          git clone "$WIKI_URL" wiki 2>/dev/null || (mkdir wiki && cd wiki && git init && git remote add origin "$WIKI_URL")
+          cd wiki
+
+          cat > Home.md << 'EOF'
+# Site Kit Portal Pin
+
+Pins production's Site Kit OAuth state across WP Engine Portal copies so dev → prod environment overwrites don't break the Google connection.
+
+**Quick links:** [README](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin#readme) · [Releases](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases) · [CHANGELOG](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/blob/main/CHANGELOG.md) · [Report a bug](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/issues/new?template=bug.yml)
+
+---
+
+## The problem
+
+WP Engine's Portal "copy environment" feature overwrites prod's `wp_options` and `wp_usermeta` with dev's values. This clobbers prod's healthy Site Kit auth state and breaks Google Analytics/Search Console reporting until someone re-OAuths in a browser.
+
+This plugin fixes it automatically.
+
+---
+
+## Wiki pages
+
+| Page | What it covers |
+|---|---|
+| [[Installation]] | Step-by-step install for mu-plugin and regular plugin paths |
+| [[Configuration]] | All three ways to set the production URL; filter reference |
+| [[How It Works]] | The snapshot/detect/restore cycle; why WPE salts make this possible |
+| [[WP-CLI Reference]] | `wp sitekit-pin snapshot`, `restore`, `status` — flags, output, exit codes |
+| [[Troubleshooting]] | Common failure modes and how to diagnose them |
+| [[Changelog]] | Version history (mirrors CHANGELOG.md) |
+
+---
+
+## Requirements
+
+- WordPress 6.0+
+- PHP 7.4+
+- WP Engine (dev and prod must share the same `wp-config.php` salts)
+- Google Site Kit plugin active on production
+EOF
+
+          git add Home.md
+          git diff --cached --quiet || git commit -m "wiki: Home page"
+          git push origin HEAD:master --force 2>/dev/null || git push origin HEAD:main --force
