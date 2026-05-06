@@ -26,7 +26,7 @@ This plugin is GitHub-only by design (see [Why not WordPress.org](#why-not-wordp
 
 ```bash
 cd wp-content/mu-plugins
-curl -O https://raw.githubusercontent.com/thisismyurl/thisismyurl-sitekit-portal-pin/main/sitekit-portal-pin.php
+curl -L -O https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases/latest/download/sitekit-portal-pin.php
 ```
 
 **As a regular plugin** via git submodule:
@@ -38,20 +38,33 @@ git submodule add https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin
 
 Then activate from the Plugins screen.
 
-**Manual download:** [download `sitekit-portal-pin.php` from `main`](https://raw.githubusercontent.com/thisismyurl/thisismyurl-sitekit-portal-pin/main/sitekit-portal-pin.php) and drop it in `wp-content/mu-plugins/`. Once a tagged release is cut, this will point there instead.
+**Manual download:** grab `sitekit-portal-pin.php` from the [latest release](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases/latest) and drop it in `wp-content/mu-plugins/`.
 
 ## Configure
 
-Currently the production siteurl is hard-coded to `https://thisismyurl.com` (see [issue #1](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/issues/1)). Until that's resolved, edit the `PROD_SITEURL` constant at the top of the plugin file to match your production environment.
+The production site URL is resolved in priority order — no editing the plugin file required:
 
-The plugin no-ops on any environment where `get_option('siteurl')` does not match this constant, so it's safe to leave installed on dev.
+1. **PHP constant** (recommended — set in `wp-config.php`):
+   ```php
+   define( 'SITEKIT_PORTAL_PIN_PROD_URL', 'https://example.com' );
+   ```
+2. **WP option** — set via WP-CLI or code:
+   ```bash
+   wp option update sitekit_portal_pin_prod_url https://example.com
+   ```
+3. **Filter** — for environment-convention detection:
+   ```php
+   add_filter( 'sitekit_portal_pin_prod_url', fn() => 'https://example.com' );
+   ```
+
+The plugin no-ops silently on any environment where `get_option('siteurl')` does not match the resolved production URL, so it's safe to install on dev and prod from the same codebase.
 
 ## Use
 
 The plugin runs unattended once installed. The WP-CLI commands are for manual operation and debugging:
 
 ```bash
-# Show snapshot age, auth health, next cron
+# Show snapshot age, auth health, MAC integrity status, next cron
 wp sitekit-pin status
 
 # Force a snapshot now (refuses if current auth is unhealthy)
@@ -68,6 +81,12 @@ All three commands refuse to run on non-production environments.
 - **It doesn't refresh expired tokens.** If your snapshot is older than 30 days, the plugin skips restore on the assumption that token refresh might fail; you'll need to re-auth in the browser, after which the next daily cron captures a fresh snapshot.
 - **It doesn't touch dev.** The plugin no-ops on any non-prod siteurl. You can ship the same file to both environments without conditional loading.
 - **It doesn't replace Site Kit Pro features** or modify how Site Kit talks to Google. It only restores the auth state Portal copies clobber.
+
+## Releases
+
+Versioned using [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`). Tagged releases are published on the [Releases page](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases). See [CHANGELOG.md](CHANGELOG.md) for the full history.
+
+This plugin has infrequent, intentional releases — not a rolling commit cadence. `main` is stable between releases but always point at a tagged release in production.
 
 ## Why not WordPress.org
 
