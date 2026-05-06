@@ -15,7 +15,7 @@
  * Copyright (C) 2026 Christopher Ross (https://thisismyurl.com)
  *
  * Mechanism:
- *   - Active only on production (siteurl = https://thisismyurl.com).
+ *   - Active only on production (resolved via SITEKIT_PORTAL_PIN_PROD_URL constant, option, or filter).
  *   - Daily wp-cron snapshots all `googlesitekit_*` options + owner user_meta keys
  *     to a JSON file at dirname(WP_CONTENT_DIR) . '/.sitekit-prod-snapshot.json'.
  *     That path lives one level above wp-content/, which Portal copies do not touch.
