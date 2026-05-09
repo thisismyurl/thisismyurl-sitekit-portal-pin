@@ -99,3 +99,8 @@ GPL-2.0-or-later. See [LICENSE](LICENSE).
 ## Author
 
 [Christopher Ross](https://thisismyurl.com) — built it for thisismyurl.com after the third Portal copy ate Site Kit. Sharing it in case you hit the same wall.
+
+
+---
+*This project follows the [10 Core Pillars](PILLARS.md). Support quality work [here](https://github.com/sponsors/thisismyurl).*
+
