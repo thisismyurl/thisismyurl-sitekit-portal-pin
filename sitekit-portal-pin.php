@@ -5,7 +5,7 @@
  * Description: Pins production's Site Kit OAuth state so WP Engine Portal copies dev → prod don't break the connection. Snapshots prod's healthy auth to a file outside wp-content/ (untouched by Portal copies); auto-restores after a copy lands dev's empty/wrong state on prod.
  * Author: Christopher Ross
  * Author URI: https://thisismyurl.com
- * Version: 1.0.0
+ * Version: 1.0.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later

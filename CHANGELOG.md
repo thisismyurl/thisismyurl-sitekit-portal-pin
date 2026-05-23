@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — `MAJO
 
 ---
 
+## [1.0.1] — 2026-05-23
+
+### Changed
+- Standardized the donation link to GitHub Sponsors (`https://github.com/sponsors/thisismyurl`).
+
 ## [1.0.0] — 2026-05-06
 
 First public release.
