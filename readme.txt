@@ -1,4 +1,4 @@
-=== Site Kit Portal Pin ===
+=== This Is My URL - Site Kit Portal Pin ===
 Contributors: thisismyurl
 Donate link: https://github.com/sponsors/thisismyurl
 Tags: site-kit, google-site-kit, wp-engine, oauth

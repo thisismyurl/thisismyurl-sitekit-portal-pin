@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Site Kit Portal Pin
+ * Plugin Name: This Is My URL - Site Kit Portal Pin
  * Plugin URI: https://github.com/thisismyurl/sitekit-portal-pin
  * Description: Pins production's Site Kit OAuth state so WP Engine Portal copies dev → prod don't break the connection. Snapshots prod's healthy auth to a file outside wp-content/ (untouched by Portal copies); auto-restores after a copy lands dev's empty/wrong state on prod.
  * Author: Christopher Ross
@@ -82,10 +82,22 @@ class TIMU_SiteKit_Prod_Pin {
 		add_action( 'admin_init', array( __CLASS__, 'maybe_restore' ), 1 );
 		add_action( self::CRON_HOOK, array( __CLASS__, 'snapshot_if_healthy' ) );
 		add_action( 'wp_loaded', array( __CLASS__, 'schedule_cron' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( __CLASS__, 'add_action_links' ) );
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::add_command( 'sitekit-pin', 'TIMU_SiteKit_Pin_CLI' );
 		}
+	}
+
+	/**
+	 * Append a Sponsor link to the plugin row actions.
+	 *
+	 * @param string[] $links Existing action links.
+	 * @return string[]
+	 */
+	public static function add_action_links( $links ) {
+		$links[] = '<a href="' . esc_url( 'https://github.com/sponsors/thisismyurl' ) . '" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Sponsor', 'sitekit-portal-pin' ) . '</a>';
+		return $links;
 	}
 
 	/**
