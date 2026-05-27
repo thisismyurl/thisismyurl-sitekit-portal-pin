@@ -5,7 +5,7 @@ Tags: site-kit, google-site-kit, wp-engine, oauth
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.6147
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,11 @@ Key behavior:
    - `sitekit_portal_pin_prod_url` filter.
 
 == Changelog ==
+
+= 1.6147 =
+* Unified plugin versioning to the x.Yddd calendar-version scheme.
+* Confirmed compatibility with WordPress 7.0.
+
 
 = 1.0.1 =
 * Standardized the donation link to GitHub Sponsors.
