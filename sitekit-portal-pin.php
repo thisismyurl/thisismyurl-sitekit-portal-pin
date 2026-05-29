@@ -54,7 +54,16 @@ class TIMU_SiteKit_Prod_Pin {
 	const RESTORE_THROTTLE_SECONDS = 300;
 
 	/**
-	 * Site Kit options to snapshot/restore.
+	 * Throttle option key, also removed on uninstall.
+	 */
+	const PROD_URL_OPTION = 'sitekit_portal_pin_prod_url';
+
+	/**
+	 * Site Kit options to snapshot/restore. This is the documented baseline set;
+	 * build_snapshot() additionally captures every option matching OPTION_PREFIX
+	 * so a newer Site Kit version that adds an auth-relevant option is not silently
+	 * dropped from the snapshot (which would otherwise leave a restore writing an
+	 * internally-inconsistent auth state).
 	 */
 	const TRACKED_OPTIONS = array(
 		'googlesitekit_credentials',
@@ -76,6 +85,12 @@ class TIMU_SiteKit_Prod_Pin {
 	const USERMETA_PREFIX = 'wp_googlesitekit';
 
 	/**
+	 * Option-name prefix for Site Kit. build_snapshot() captures every option
+	 * matching this prefix so the snapshot stays complete across Site Kit upgrades.
+	 */
+	const OPTION_PREFIX = 'googlesitekit_';
+
+	/**
 	 * Bootstrap.
 	 */
 	public static function init() {
@@ -86,6 +101,31 @@ class TIMU_SiteKit_Prod_Pin {
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			WP_CLI::add_command( 'sitekit-pin', 'TIMU_SiteKit_Pin_CLI' );
+		}
+	}
+
+	/**
+	 * Deactivation handler — clear the scheduled snapshot cron so a deactivated
+	 * plugin leaves no orphaned event in the cron table.
+	 */
+	public static function on_deactivation() {
+		wp_clear_scheduled_hook( self::CRON_HOOK );
+	}
+
+	/**
+	 * Uninstall handler — remove every trace this plugin leaves behind:
+	 *   - the throttle option and the configured prod-URL option, and
+	 *   - the on-disk snapshot file, which holds live OAuth credential blobs and
+	 *     must not survive an uninstall sitting outside wp-content/.
+	 */
+	public static function on_uninstall() {
+		wp_clear_scheduled_hook( self::CRON_HOOK );
+		delete_option( self::RESTORE_THROTTLE_KEY );
+		delete_option( self::PROD_URL_OPTION );
+
+		$path = self::snapshot_path();
+		if ( file_exists( $path ) ) {
+			wp_delete_file( $path );
 		}
 	}
 
@@ -165,8 +205,20 @@ class TIMU_SiteKit_Prod_Pin {
 			return null;
 		}
 
+		// Capture every googlesitekit_* option, not just the baseline TRACKED_OPTIONS,
+		// so a restore never writes a partial auth state when Site Kit adds new options.
+		// The TRACKED_OPTIONS list is folded in as a floor in case a key is absent from
+		// the options table (e.g. autoloaded defaults that have not been persisted yet).
+		$option_names = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( self::OPTION_PREFIX ) . '%'
+			)
+		);
+		$option_names = array_unique( array_merge( (array) $option_names, self::TRACKED_OPTIONS ) );
+
 		$options = array();
-		foreach ( self::TRACKED_OPTIONS as $key ) {
+		foreach ( $option_names as $key ) {
 			$val = get_option( $key, null );
 			if ( null !== $val ) {
 				$options[ $key ] = $val;
@@ -190,11 +242,12 @@ class TIMU_SiteKit_Prod_Pin {
 		}
 
 		return array(
-			'version'          => 1,
+			'version'          => 2,
 			'taken_at'         => time(),
 			'taken_at_human'   => gmdate( 'c' ),
 			'siteurl'          => get_option( 'siteurl' ),
 			'owner_id'         => $owner_id,
+			'sitekit_version'  => (string) get_option( 'googlesitekit_db_version', '' ),
 			'options'          => $options,
 			'usermeta'         => $usermeta,
 		);
@@ -300,7 +353,11 @@ class TIMU_SiteKit_Prod_Pin {
 		if ( ! hash_equals( $expected, (string) $payload['mac'] ) ) {
 			// Integrity check failed. Log a single notice and fail closed.
 			add_action( 'admin_notices', static function () {
-				echo '<div class="notice notice-error"><p><strong>Site Kit Portal Pin:</strong> snapshot integrity check failed (HMAC mismatch). The snapshot file may have been tampered with or corrupted. A fresh snapshot will be taken on the next healthy auth check.</p></div>';
+				printf(
+					'<div class="notice notice-error"><p><strong>%1$s</strong> %2$s</p></div>',
+					esc_html__( 'Site Kit Portal Pin:', 'sitekit-portal-pin' ),
+					esc_html__( 'snapshot integrity check failed (HMAC mismatch). The snapshot file may have been tampered with or corrupted. A fresh snapshot will be taken on the next healthy auth check.', 'sitekit-portal-pin' )
+				);
 			} );
 			return null;
 		}
@@ -360,6 +417,14 @@ class TIMU_SiteKit_Prod_Pin {
 			return;
 		}
 		if ( wp_doing_ajax() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
+			return;
+		}
+
+		// Restore mutates Site Kit credential options + owner user_meta, so the trigger
+		// must not be reachable by low-privilege users who merely land on an admin request
+		// (e.g. their own profile.php). The restore payload is HMAC-self-authored data, but
+		// the side-effecting admin_init path is gated to administrators regardless.
+		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
 
@@ -498,5 +563,8 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		}
 	}
 }
+
+register_deactivation_hook( __FILE__, array( 'TIMU_SiteKit_Prod_Pin', 'on_deactivation' ) );
+register_uninstall_hook( __FILE__, array( 'TIMU_SiteKit_Prod_Pin', 'on_uninstall' ) );
 
 TIMU_SiteKit_Prod_Pin::init();
