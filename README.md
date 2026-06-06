@@ -1,4 +1,4 @@
-# This Is My URL - Site Kit Portal Pin
+# Christopher Ross - Site Kit Portal Pin
 
 [![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-blue)](https://wordpress.org/) [![License](https://img.shields.io/badge/License-GPL--2.0-blue)](LICENSE)
 
@@ -86,7 +86,7 @@ All three commands refuse to run on non-production environments.
 
 ## Releases
 
-Versioned with the `x.Yddd` calendar scheme used across the This Is My URL plugin family. Tagged releases are published on the [Releases page](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases). See [CHANGELOG.md](CHANGELOG.md) for the full history.
+Versioned with the `x.Yddd` calendar scheme used across the Christopher Ross plugin family. Tagged releases are published on the [Releases page](https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases). See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
 This plugin has infrequent, intentional releases — not a rolling commit cadence. `main` is stable between releases, but always point at a tagged release in production.
 
@@ -123,9 +123,9 @@ Code contributions are welcome. The short version:
 
 The full workflow and standards live in [CONTRIBUTING.md](CONTRIBUTING.md). Contributing is never required, but it is always appreciated.
 
-## About This Is My URL
+## About Christopher Ross
 
-This plugin is built and maintained by [This Is My URL](https://thisismyurl.com/), the WordPress development and technical SEO practice of Christopher Ross. I help teams build WordPress sites that stay secure, fast, and maintainable, and I write small, focused plugins like this one for the problems those sites keep running into.
+This plugin is built and maintained by [Christopher Ross](https://thisismyurl.com/), the WordPress development and technical SEO practice of Christopher Ross. I help teams build WordPress sites that stay secure, fast, and maintainable, and I write small, focused plugins like this one for the problems those sites keep running into.
 
 ### My background
 

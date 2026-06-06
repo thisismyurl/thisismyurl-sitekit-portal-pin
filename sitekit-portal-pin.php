@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: This Is My URL - Site Kit Portal Pin
+ * Plugin Name: Site Kit Portal Pin by Christopher Ross
  * Plugin URI: https://github.com/thisismyurl/sitekit-portal-pin
  * Description: Pins production's Site Kit OAuth state so WP Engine Portal copies dev → prod don't break the connection. Snapshots prod's healthy auth to a file outside wp-content/ (untouched by Portal copies); auto-restores after a copy lands dev's empty/wrong state on prod.
  * Author: Christopher Ross
