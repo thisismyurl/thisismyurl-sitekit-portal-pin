@@ -3,29 +3,66 @@
 All notable changes to Site Kit Portal Pin are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
-Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — `MAJOR.MINOR.PATCH`
+Versioning: `X.Yjjj.hhmm` — major version, last digit of year, Julian day, 24-hour time (Toronto). Example: `1.6190.1000` = major 1, year 2026, day 190, 10:00.
+
+---
+
+## [1.6190.1000] — 2026-07-09
+
+### Fixed
+- Correct docblock on `PROD_URL_OPTION` constant (incorrectly read "Throttle option key").
+- Correct indentation in WP-CLI `snapshot` command error handler.
+
+### Changed
+- readme.txt and README.md rewritten for clarity and SEO; README.md previously described an unrelated plugin.
+
+---
+
+## [1.6148.2110] — 2026-05-28
+
+### Security
+- Gated the admin-load restore behind `manage_options` so only administrators can trigger a credential-state mutation.
+
+### Added
+- HMAC snapshot integrity — snapshot file is wrapped in a `{mac, body}` envelope signed with `wp_salt('auth')`. Integrity verified on every read; HMAC failure produces an admin notice and fails closed.
+- Full `googlesitekit_*` option capture — snapshot includes every matching option dynamically (not just a fixed baseline list), so a restore after a Site Kit upgrade never writes a partial auth state.
+- Site Kit version stamp (`googlesitekit_db_version`) captured in snapshot for diagnostics.
+- Restore skip when snapshot is older than 30 days.
+
+### Changed
+- Restore throttle uses a WP option (`timu_sitekit_pin_last_check`), updated at most once per five minutes. Lower DB write frequency than the prior approach.
+
+### Fixed
+- Deactivation hook now correctly clears the scheduled snapshot cron.
+- Uninstall hook deletes the on-disk snapshot file (which holds OAuth credential blobs) and removes both plugin options.
+
+---
+
+## [1.6147] — 2026-05-27
+
+### Changed
+- Unified versioning to the `X.Yjjj.hhmm` calendar-version scheme.
+- Confirmed compatibility with WordPress 7.0.
 
 ---
 
 ## [1.0.1] — 2026-05-23
 
 ### Changed
-- Standardized the donation link to GitHub Sponsors (`https://github.com/sponsors/thisismyurl`).
+- Standardized donation link to GitHub Sponsors.
+
+---
 
 ## [1.0.0] — 2026-05-06
 
 First public release.
 
 ### Added
-
-- **Configurable production URL.** No longer hard-coded. Resolved via (in priority order): `SITEKIT_PORTAL_PIN_PROD_URL` PHP constant → `sitekit_portal_pin_prod_url` WP option → `sitekit_portal_pin_prod_url` filter. Plugin no-ops silently if nothing is configured.
-- **HMAC snapshot integrity.** Snapshot file is wrapped in a `{mac, body}` envelope signed with `wp_salt('auth')`. Integrity is verified on every read; a mismatch produces a single admin notice and fails closed. `wp sitekit-pin status` reports `MAC-verified OK`, `MAC-missing`, or `MAC-FAILED`.
-- **Atomic snapshot write with `LOCK_EX`.** File permissions set to `0640` on write.
-- **Restore throttle via transient.** The admin-init restore check runs at most once per 5 minutes using a transient (not an option write), reducing DB writes on high-traffic admin sessions.
-- **Daily wp-cron snapshot.** Captures all `googlesitekit_*` options and the owner user's `wp_googlesitekit_*` user_meta to a JSON file at `dirname(WP_CONTENT_DIR)/.sitekit-prod-snapshot.json` — a path Portal copies do not touch.
-- **Auto-restore on broken state detection.** On every admin page load (throttled), checks for missing credentials, owner_id mismatch, or `error_code` on the owner user. Restores from snapshot when triggered. Skips restore if snapshot is older than 30 days.
-- **WP-CLI commands.** `wp sitekit-pin snapshot`, `wp sitekit-pin restore`, `wp sitekit-pin status`.
-- **GitHub Actions PR lint.** `php -l` across PHP 7.4, 8.0, 8.1, 8.2, 8.3 matrix on every pull request.
-- **`phpcs.xml`.** WordPress Coding Standards ruleset with documented suppressions for intentional single-file distribution and out-of-`wp-content/` file I/O.
-
-[1.0.0]: https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases/tag/v1.0.0
+- Configurable production URL via constant, option, or filter.
+- Daily WP Cron snapshot of all `googlesitekit_*` options and owner user meta.
+- Auto-restore on broken auth state detection (admin page loads, administrators only, throttled).
+- WP-CLI commands: `wp sitekit-pin snapshot`, `wp sitekit-pin restore`, `wp sitekit-pin status`.
+- Atomic snapshot write with `LOCK_EX`; file permissions set to `0640`.
+- Deactivation clears the cron event; uninstall removes plugin options and snapshot file.
+- GitHub Actions PR lint — `php -l` across PHP 7.4–8.3 matrix.
+- `phpcs.xml` with WordPress Coding Standards and documented suppressions.
