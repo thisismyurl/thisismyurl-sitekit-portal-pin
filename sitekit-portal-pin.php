@@ -5,7 +5,7 @@
  * Description: Pins production's Site Kit OAuth state so WP Engine Portal copies dev → prod don't break the connection. Snapshots prod's healthy auth to a file outside wp-content/ (untouched by Portal copies); auto-restores after a copy lands dev's empty/wrong state on prod.
  * Author: Christopher Ross
  * Author URI: https://thisismyurl.com
- * Version: 1.6148.2110
+ * Version: 1.6190.1000
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -54,7 +54,7 @@ class TIMU_SiteKit_Prod_Pin {
 	const RESTORE_THROTTLE_SECONDS = 300;
 
 	/**
-	 * Throttle option key, also removed on uninstall.
+	 * Option key for the configured production site URL. Removed on uninstall.
 	 */
 	const PROD_URL_OPTION = 'sitekit_portal_pin_prod_url';
 
