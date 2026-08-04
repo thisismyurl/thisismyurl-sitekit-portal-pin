@@ -66,9 +66,31 @@ Plugin silently no-ops if no production URL is configured.
 ## WP-CLI commands
 
 ```bash
-wp sitekit-pin status     # Show production flag, auth health, snapshot age, HMAC status, next cron
+wp sitekit-pin status     # Show enabled state, production flag, auth health, snapshot age, HMAC status, next cron
 wp sitekit-pin snapshot   # Take a snapshot now (prod + healthy auth required)
-wp sitekit-pin restore    # Restore from snapshot now (prod required)
+wp sitekit-pin restore    # Restore from snapshot now (prod required; runs even when the gate is off)
+```
+
+## Extending
+
+The plugin exposes filters so you can control its behaviour without editing it. All automatic behaviour is also governed by a single master gate; `wp sitekit-pin restore` is deliberately exempt so manual recovery is never blocked.
+
+| Filter | Governs |
+|---|---|
+| `sitekit_portal_pin_enabled` | Master on/off for automatic snapshot cron and auto-restore. Default `true`. |
+| `sitekit_portal_pin_is_production` | The environment-detection result. |
+| `sitekit_portal_pin_is_auth_healthy` | The auth-health heuristic (receives the owner user). |
+| `sitekit_portal_pin_should_restore` | Per-trigger gate checked before an auto-restore fires. |
+| `sitekit_portal_pin_max_restore_age` | Age cap in seconds; a snapshot older than this is not auto-restored. `0` disables the check. Default 30 days. |
+| `sitekit_portal_pin_pre_pin` | Short-circuit the cron snapshot (return non-null to skip). |
+| `sitekit_portal_pin_tracked_options` | The full option set snapshot and restore act on (the `googlesitekit_*` scan plus the baseline floor). |
+| `sitekit_portal_pin_usermeta_prefix` | The owner user_meta key prefix captured. |
+| `sitekit_portal_pin_snapshot_path` | The absolute path the snapshot file is written to and read from. |
+| `sitekit_portal_pin_prod_url` | The production URL used for environment detection. |
+
+```php
+// Example: turn off automatic pin/restore in a specific environment.
+add_filter( 'sitekit_portal_pin_enabled', '__return_false' );
 ```
 
 ## How the snapshot survives a Portal copy

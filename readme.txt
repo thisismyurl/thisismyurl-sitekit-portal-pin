@@ -5,7 +5,7 @@ Tags: site-kit, google-site-kit, wp-engine, google-analytics, oauth
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.6190.1000
+Stable tag: 1.6216.1411
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -127,6 +127,12 @@ Yes. `wp sitekit-pin snapshot` takes a snapshot immediately (prod only, healthy 
 Two options: `sitekit_portal_pin_prod_url` (your configured production URL, if set via the option method) and `timu_sitekit_pin_last_check` (the throttle timestamp — updated at most once per five minutes during admin loads). Both are removed on uninstall.
 
 == Changelog ==
+
+= 1.6216 — 2026-08-04 =
+* Added: a developer extensibility surface. A `sitekit_portal_pin_enabled` master gate plus eight filters (`is_production`, `is_auth_healthy`, `snapshot_path`, `tracked_options`, `usermeta_prefix`, `pre_pin`, `max_restore_age`, `should_restore`) let you control pin and restore behaviour without editing the plugin.
+* Added: a snapshot age cap (30 days, filterable) so auto-restore declines to act on a stale snapshot.
+* Changed: the automatic snapshot cron and auto-restore-on-admin-load now honour the enabled gate. The `wp sitekit-pin restore` command stays exempt, so manual recovery is never blocked.
+* Changed: `wp sitekit-pin status` now reports the enabled state (read-only).
 
 = 1.6190 — 2026-07-09 =
 * Fix: correct docblock on `PROD_URL_OPTION` constant (previously read "Throttle option key").

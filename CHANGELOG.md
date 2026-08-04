@@ -7,6 +7,16 @@ Versioning: `X.Yjjj.hhmm` — major version, last digit of year, Julian day, 24-
 
 ---
 
+## [1.6216.1411] — 2026-08-04
+
+### Added
+- Developer extensibility surface: a `sitekit_portal_pin_enabled` master gate, plus filters `sitekit_portal_pin_is_production`, `sitekit_portal_pin_is_auth_healthy`, `sitekit_portal_pin_snapshot_path`, `sitekit_portal_pin_tracked_options`, `sitekit_portal_pin_usermeta_prefix`, `sitekit_portal_pin_pre_pin`, `sitekit_portal_pin_max_restore_age`, and `sitekit_portal_pin_should_restore`.
+- Snapshot age cap constant `DEFAULT_MAX_RESTORE_AGE` (30 days), filterable via `sitekit_portal_pin_max_restore_age`, so auto-restore declines to act on a stale snapshot.
+
+### Changed
+- Automatic snapshot cron and auto-restore-on-admin-load now honour the `sitekit_portal_pin_enabled` gate. The WP-CLI `restore` command stays exempt so manual recovery is never blocked.
+- `wp sitekit-pin status` now reports the enabled/gate state (read-only).
+
 ## [1.6190.1000] — 2026-07-09
 
 ### Fixed

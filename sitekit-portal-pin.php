@@ -5,7 +5,7 @@
  * Description: Pins production's Site Kit OAuth state so WP Engine Portal copies dev → prod don't break the connection. Snapshots prod's healthy auth to a file outside wp-content/ (untouched by Portal copies); auto-restores after a copy lands dev's empty/wrong state on prod.
  * Author: Christopher Ross
  * Author URI: https://thisismyurl.com
- * Version: 1.6190.1000
+ * Version: 1.6216.1411
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -52,6 +52,13 @@ class TIMU_SiteKit_Prod_Pin {
 	 * Throttle window — only run the heavy restore check once per N seconds.
 	 */
 	const RESTORE_THROTTLE_SECONDS = 300;
+
+	/**
+	 * Default soft cap on snapshot age before auto-restore declines to act. An
+	 * explicit `wp sitekit-pin restore` ignores this cap; only the automatic
+	 * admin-init restore honours it. Filterable via sitekit_portal_pin_max_restore_age.
+	 */
+	const DEFAULT_MAX_RESTORE_AGE = 30 * DAY_IN_SECONDS;
 
 	/**
 	 * Option key for the configured production site URL. Removed on uninstall.
@@ -105,6 +112,45 @@ class TIMU_SiteKit_Prod_Pin {
 	}
 
 	/**
+	 * Master gate for the plugin's automatic pin/restore behaviour.
+	 *
+	 * A false return disables the daily snapshot cron and the auto-restore on admin
+	 * page load without deactivating the plugin. Recovery is never blocked:
+	 * `wp sitekit-pin restore` calls restore_from_snapshot() directly and runs
+	 * regardless of this gate, so an operator can always re-apply a pinned state.
+	 *
+	 * @return bool Whether automatic pin/restore behaviour is enabled. Default true.
+	 */
+	public static function is_enabled() {
+		/**
+		 * Filter the master on/off gate for automatic pin and restore behaviour.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param bool $enabled Whether automatic behaviour is enabled. Default true.
+		 */
+		return (bool) apply_filters( 'sitekit_portal_pin_enabled', true );
+	}
+
+	/**
+	 * Resolve the owner user_meta key prefix captured in a snapshot.
+	 *
+	 * @return string Meta-key prefix. Falls back to USERMETA_PREFIX if filtered empty.
+	 */
+	public static function get_usermeta_prefix() {
+		/**
+		 * Filter the owner user_meta key prefix captured in a snapshot.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param string $prefix Meta-key prefix. Default self::USERMETA_PREFIX.
+		 */
+		$prefix = (string) apply_filters( 'sitekit_portal_pin_usermeta_prefix', self::USERMETA_PREFIX );
+
+		return '' === $prefix ? self::USERMETA_PREFIX : $prefix;
+	}
+
+	/**
 	 * Deactivation handler — clear the scheduled snapshot cron so a deactivated
 	 * plugin leaves no orphaned event in the cron table.
 	 */
@@ -146,9 +192,25 @@ class TIMU_SiteKit_Prod_Pin {
 	public static function is_production() {
 		$prod_url = self::get_prod_siteurl();
 		if ( '' === $prod_url ) {
-			return false; // No production URL configured — no-op silently.
+			$result = false; // No production URL configured; no-op silently.
+		} else {
+			$result = rtrim( (string) get_option( 'siteurl' ), '/' ) === $prod_url;
 		}
-		return rtrim( (string) get_option( 'siteurl' ), '/' ) === $prod_url;
+
+		/**
+		 * Filter the environment-detection result.
+		 *
+		 * Lets a site override how "is this production?" is decided, for example to
+		 * pin against a WP Engine environment name instead of a URL match. Returning
+		 * true on a non-prod environment arms the automatic pin/restore behaviour, so
+		 * override deliberately.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param bool   $result   Whether the current install is production.
+		 * @param string $prod_url Resolved production URL, or '' if unconfigured.
+		 */
+		return (bool) apply_filters( 'sitekit_portal_pin_is_production', $result, $prod_url );
 	}
 
 	/**
@@ -179,7 +241,20 @@ class TIMU_SiteKit_Prod_Pin {
 	 * Path to the snapshot file. Lives outside wp-content/ so Portal copies don't touch it.
 	 */
 	public static function snapshot_path() {
-		return dirname( WP_CONTENT_DIR ) . '/.sitekit-prod-snapshot.json';
+		$path = dirname( WP_CONTENT_DIR ) . '/.sitekit-prod-snapshot.json';
+
+		/**
+		 * Filter the absolute path the snapshot file is written to and read from.
+		 *
+		 * The default lives one level above wp-content/ so WP Engine Portal copies
+		 * leave it untouched. Override only with a path that survives Portal copies,
+		 * or the auto-restore safety net stops working.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param string $path Absolute snapshot file path.
+		 */
+		return (string) apply_filters( 'sitekit_portal_pin_snapshot_path', $path );
 	}
 
 	/**
@@ -187,6 +262,9 @@ class TIMU_SiteKit_Prod_Pin {
 	 */
 	public static function schedule_cron() {
 		if ( ! self::is_production() ) {
+			return;
+		}
+		if ( ! self::is_enabled() ) {
 			return;
 		}
 		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
@@ -217,6 +295,21 @@ class TIMU_SiteKit_Prod_Pin {
 		);
 		$option_names = array_unique( array_merge( (array) $option_names, self::TRACKED_OPTIONS ) );
 
+		/**
+		 * Filter the full option set captured for a snapshot and re-applied on restore.
+		 *
+		 * The default is every option matching OPTION_PREFIX in the database, unioned
+		 * with the TRACKED_OPTIONS floor. Add keys to capture an auth-adjacent option
+		 * the prefix scan misses, or remove keys to exclude them from snapshot and
+		 * restore. Removing an auth-relevant key risks writing a partial state on restore.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param string[] $option_names Option keys captured for the snapshot.
+		 */
+		$option_names = apply_filters( 'sitekit_portal_pin_tracked_options', $option_names );
+		$option_names = array_values( array_filter( array_map( 'strval', (array) $option_names ) ) );
+
 		$options = array();
 		foreach ( $option_names as $key ) {
 			$val = get_option( $key, null );
@@ -229,7 +322,7 @@ class TIMU_SiteKit_Prod_Pin {
 			$wpdb->prepare(
 				"SELECT DISTINCT meta_key FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
 				$owner_id,
-				$wpdb->esc_like( self::USERMETA_PREFIX ) . '%'
+				$wpdb->esc_like( self::get_usermeta_prefix() ) . '%'
 			)
 		);
 
@@ -264,22 +357,31 @@ class TIMU_SiteKit_Prod_Pin {
 		$proxy   = (string) get_option( 'googlesitekit_connected_proxy_url' );
 		$siteurl = (string) get_option( 'siteurl' );
 
+		$healthy = true;
 		if ( empty( $creds ) || ! $owner ) {
-			return false;
-		}
-		if ( ! empty( $err ) ) {
-			return false;
-		}
-		if ( $proxy && rtrim( $proxy, '/' ) !== rtrim( $siteurl, '/' ) ) {
-			return false;
-		}
-
-		$access_token = get_user_meta( $owner, 'wp_googlesitekit_access_token', true );
-		if ( empty( $access_token ) ) {
-			return false;
+			$healthy = false;
+		} elseif ( ! empty( $err ) ) {
+			$healthy = false;
+		} elseif ( $proxy && rtrim( $proxy, '/' ) !== rtrim( $siteurl, '/' ) ) {
+			$healthy = false;
+		} elseif ( empty( get_user_meta( $owner, 'wp_googlesitekit_access_token', true ) ) ) {
+			$healthy = false;
 		}
 
-		return true;
+		/**
+		 * Filter the auth-health heuristic result.
+		 *
+		 * The default heuristic flags missing credentials, a missing owner, an
+		 * error_code on the owner, a proxy/siteurl mismatch, or a missing access
+		 * token. A false result on prod arms auto-restore; a true result arms the
+		 * daily snapshot. Override to tighten or loosen what counts as healthy.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param bool $healthy Whether Site Kit auth is considered healthy.
+		 * @param int  $owner   Resolved Site Kit owner user ID (0 if unset).
+		 */
+		return (bool) apply_filters( 'sitekit_portal_pin_is_auth_healthy', $healthy, $owner );
 	}
 
 	/**
@@ -289,7 +391,29 @@ class TIMU_SiteKit_Prod_Pin {
 		if ( ! self::is_production() ) {
 			return;
 		}
+		if ( ! self::is_enabled() ) {
+			return;
+		}
 		if ( ! self::is_auth_healthy() ) {
+			return;
+		}
+
+		$path = self::snapshot_path();
+
+		/**
+		 * Short-circuit the automatic (cron) pin before any snapshot work begins.
+		 *
+		 * Return a non-null value to skip this scheduled pin without touching the
+		 * master gate, for example to suspend pinning during a maintenance window or
+		 * while an external lock is held. Does not affect `wp sitekit-pin snapshot`,
+		 * which an operator runs deliberately.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param null|mixed $pre  Short-circuit value. Return non-null to skip the pin. Default null.
+		 * @param string     $path Snapshot path the pin would write to.
+		 */
+		if ( null !== apply_filters( 'sitekit_portal_pin_pre_pin', null, $path ) ) {
 			return;
 		}
 
@@ -416,6 +540,9 @@ class TIMU_SiteKit_Prod_Pin {
 		if ( ! self::is_production() ) {
 			return;
 		}
+		if ( ! self::is_enabled() ) {
+			return;
+		}
 		if ( wp_doing_ajax() || ( defined( 'DOING_CRON' ) && DOING_CRON ) ) {
 			return;
 		}
@@ -445,10 +572,40 @@ class TIMU_SiteKit_Prod_Pin {
 		}
 
 		// Don't restore if the snapshot is stale enough that token refresh might fail.
-		// Site Kit's refresh tokens are long-lived but we keep a soft 30-day cap.
-		$taken    = isset( $snap['taken_at'] ) ? (int) $snap['taken_at'] : 0;
-		$max_age  = 30 * DAY_IN_SECONDS;
-		if ( $taken && ( time() - $taken ) > $max_age ) {
+		// Site Kit's refresh tokens are long-lived but we keep a soft cap (default 30 days).
+		$taken = isset( $snap['taken_at'] ) ? (int) $snap['taken_at'] : 0;
+
+		/**
+		 * Filter the soft cap, in seconds, on snapshot age for auto-restore.
+		 *
+		 * Auto-restore declines to act on a snapshot older than this, on the
+		 * assumption a stale refresh token may have lapsed. Does not affect a manual
+		 * `wp sitekit-pin restore`, which always re-applies the snapshot regardless
+		 * of age. A value of 0 disables the age check.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param int $max_age Maximum snapshot age in seconds. Default 30 days.
+		 */
+		$max_age = (int) apply_filters( 'sitekit_portal_pin_max_restore_age', self::DEFAULT_MAX_RESTORE_AGE );
+		if ( $taken && $max_age > 0 && ( time() - $taken ) > $max_age ) {
+			return;
+		}
+
+		/**
+		 * Per-trigger gate on the automatic admin-init restore.
+		 *
+		 * Return false to skip this particular auto-restore, distinct from the master
+		 * gate and from the restore operation itself, which a manual CLI run always
+		 * reaches. Fires only after broken state and a fresh-enough snapshot have both
+		 * been confirmed.
+		 *
+		 * @since 1.6216.1411
+		 *
+		 * @param bool  $should Whether to auto-restore now. Default true.
+		 * @param array $snap   Snapshot array that would be applied.
+		 */
+		if ( ! apply_filters( 'sitekit_portal_pin_should_restore', true, $snap ) ) {
 			return;
 		}
 
@@ -531,6 +688,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 		 */
 		public function status( $args, $assoc_args ) {
 			$path = TIMU_SiteKit_Prod_Pin::snapshot_path();
+			WP_CLI::log( 'Enabled: ' . ( TIMU_SiteKit_Prod_Pin::is_enabled() ? 'YES' : 'no (auto pin/restore off; manual restore still works)' ) );
 			WP_CLI::log( 'Production: ' . ( TIMU_SiteKit_Prod_Pin::is_production() ? 'YES' : 'no (no-op env)' ) );
 			WP_CLI::log( 'Auth healthy: ' . ( TIMU_SiteKit_Prod_Pin::is_auth_healthy() ? 'YES' : 'NO' ) );
 			WP_CLI::log( 'Snapshot path: ' . $path );
