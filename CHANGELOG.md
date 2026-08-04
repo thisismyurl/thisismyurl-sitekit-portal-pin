@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — `MAJO
 
 ---
 
+## [1.1.0] — 2026-05-24
+
+Developer surface — hooks, filters, and a hardened WP-CLI. Fully backward compatible; defaults reproduce 1.0.0 behaviour exactly.
+
+### Added
+
+- **Master gate filter `sitekit_portal_pin_enabled`** (default `true`). Suspends the daily snapshot cron and the auto-restore on admin load without deactivating the plugin. The `wp sitekit-pin restore` recovery path is intentionally never blocked by this gate.
+- **Decision-point filters.** `sitekit_portal_pin_is_production` (environment-detection result), `sitekit_portal_pin_tracked_options` (which option keys are pinned), `sitekit_portal_pin_usermeta_prefix` (owner meta prefix), `sitekit_portal_pin_snapshot_path` (snapshot location), `sitekit_portal_pin_is_auth_healthy` (health heuristic), `sitekit_portal_pin_pre_pin` (short-circuit a pin), `sitekit_portal_pin_should_restore` (per-trigger gate on auto-restore), `sitekit_portal_pin_max_restore_age` (auto-restore staleness cap).
+- **Lifecycle actions.** `sitekit_portal_pin_before_pin` / `sitekit_portal_pin_after_pin`, `sitekit_portal_pin_state_pinned` (success), `sitekit_portal_pin_pin_failed`; `sitekit_portal_pin_before_restore` / `sitekit_portal_pin_after_restore`, `sitekit_portal_pin_state_restored` (re-apply over a clobbered state), `sitekit_portal_pin_restore_failed`.
+- **`wp sitekit-pin status --format=`** now supports `list` (default), `table`, `json`, and `yaml`, and reports the gate state and the tracked option keys alongside environment, integrity, and age.
+
+### Security
+
+- **Capability check on mutating CLI commands.** `wp sitekit-pin snapshot` and `wp sitekit-pin restore` now require the `manage_options` capability. Previously a CLI invocation with no user context could mutate auth state with no authorization check. `status` remains read-only and uncapped.
+
+### Documented
+
+- **Existing `sitekit_portal_pin_prod_url` filter** (shipped in 1.0.0) is now documented in the developer surface.
+
+[1.1.0]: https://github.com/thisismyurl/thisismyurl-sitekit-portal-pin/releases/tag/v1.1.0
+
 ## [1.0.0] — 2026-05-06
 
 First public release.

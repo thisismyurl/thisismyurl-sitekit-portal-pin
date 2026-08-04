@@ -74,7 +74,55 @@ wp sitekit-pin snapshot
 wp sitekit-pin restore
 ```
 
-All three commands refuse to run on non-production environments.
+The `snapshot` and `restore` commands require the `manage_options` capability (run as an admin with `wp --user=<admin> ...` if your CLI session has no user context); `status` is read-only and needs no capability. All three commands refuse to run on non-production environments.
+
+## For developers
+
+Site Kit Portal Pin exposes a developer surface so you can observe and adjust its behaviour without forking the plugin. All hooks use the `sitekit_portal_pin_` prefix.
+
+### WP-CLI
+
+```bash
+# Read-only: gate state, detected environment, prod URL, tracked keys, snapshot integrity/age
+wp sitekit-pin status
+wp sitekit-pin status --format=json
+
+# Capture current healthy auth state to the snapshot file (refuses if auth is unhealthy)
+wp --user=admin sitekit-pin snapshot
+
+# Re-apply the latest snapshot over the current auth state
+wp --user=admin sitekit-pin restore
+```
+
+`snapshot` and `restore` require `manage_options`; `status` is read-only. All three are production-only.
+
+### Filters
+
+| Filter | What it controls | Default |
+| --- | --- | --- |
+| `sitekit_portal_pin_enabled` | Master gate for the daily snapshot cron and the auto-restore on admin load. Returning `false` suspends automatic behaviour; the `wp sitekit-pin restore` recovery path is never blocked by it. | `true` |
+| `sitekit_portal_pin_prod_url` | Resolves the production site URL when no constant or option is set (e.g. derive from a WP-Engine environment name). _Available since 1.0.0._ | `''` |
+| `sitekit_portal_pin_is_production` | Overrides the environment-detection result. Receives the URL-match result and resolved prod URL. | URL match |
+| `sitekit_portal_pin_tracked_options` | The `googlesitekit_*` option keys captured and re-applied. | `TRACKED_OPTIONS` |
+| `sitekit_portal_pin_usermeta_prefix` | The owner user_meta key prefix captured. | `wp_googlesitekit` |
+| `sitekit_portal_pin_snapshot_path` | Absolute path the snapshot is written to and read from. Must survive Portal copies. | `dirname(WP_CONTENT_DIR)/.sitekit-prod-snapshot.json` |
+| `sitekit_portal_pin_is_auth_healthy` | Overrides the auth-health heuristic. Receives the default result and owner user ID. | heuristic |
+| `sitekit_portal_pin_pre_pin` | Short-circuit a pin. Return a non-`null` array to bypass the snapshot write. | `null` |
+| `sitekit_portal_pin_should_restore` | Per-trigger gate on the automatic admin-init restore, fired after broken state and a fresh-enough snapshot are confirmed. | `true` |
+| `sitekit_portal_pin_max_restore_age` | Soft cap, in seconds, on snapshot age for auto-restore (a manual CLI restore ignores it). | `30 * DAY_IN_SECONDS` |
+
+### Actions
+
+| Action | When it fires | Arguments |
+| --- | --- | --- |
+| `sitekit_portal_pin_before_pin` | Immediately before the current auth state is written to disk. | `$path` |
+| `sitekit_portal_pin_state_pinned` | After a snapshot is successfully written. | `$path`, `$snapshot` |
+| `sitekit_portal_pin_pin_failed` | After a pin attempt fails (`no_owner` or `write_failed`). | `$reason`, `$path` |
+| `sitekit_portal_pin_after_pin` | After a pin attempt, on success or failure. | `$result` |
+| `sitekit_portal_pin_before_restore` | Immediately before pinned state is re-applied. | `$snap` (array or `null`) |
+| `sitekit_portal_pin_state_restored` | After pinned state is re-applied over a clobbered state (the post-Portal-copy recovery event). | `$result`, `$snap` |
+| `sitekit_portal_pin_restore_failed` | After a restore attempt re-applies nothing. | `$reason` |
+| `sitekit_portal_pin_after_restore` | After a restore attempt, on success or failure. | `$result` |
 
 ## What it doesn't do
 
